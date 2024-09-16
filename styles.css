@@ -1,0 +1,176 @@
+/* General layout */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #00182d;
+    margin: 0;
+    padding: 0;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+#app-container {
+    display: flex;
+    width: 90%;
+    max-width: 1200px;
+    height: 90vh;
+    background-color: #131f25;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Sidebar - similar to Discord */
+#sidebar {
+    width: 250px;
+    background-color: #1a2a34;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+#sidebar h2 {
+    color: #ff7b00;
+    margin-bottom: 20px;
+}
+
+#server-select {
+    width: 100%;
+    background-color: #1a2a34;
+    color: white;
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #ff7b00;
+    border-radius: 5px;
+}
+
+#add-server-button {
+    width: 100%;
+    background-color: #ff7b00;
+    padding: 10px;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin-bottom: 20px;
+}
+
+#add-server-button:hover {
+    background-color: #e56f00;
+}
+
+#add-server-form {
+    display: none;
+    width: 100%;
+}
+
+#add-server-form input[type="text"] {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #1a2a34;
+    border: 1px solid #ff7b00;
+    color: white;
+    border-radius: 5px;
+}
+
+#add-server-form button {
+    width: 100%;
+    background-color: #ff7b00;
+    padding: 10px;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#add-server-form button:hover {
+    background-color: #e56f00;
+}
+
+/* Main Chat Area - similar to WhatsApp */
+#main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background-color: #131f25;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+#messages {
+    flex-grow: 1;
+    border: 1px solid #ff7b00;
+    padding: 10px;
+    background-color: #1a2a34;
+    overflow-y: auto;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.message {
+    margin-bottom: 15px;
+}
+
+.message .sender {
+    font-weight: bold;
+    color: #ff7b00;
+}
+
+#input-container {
+    display: flex;
+    justify-content: space-between;
+    background-color: #1a2a34;
+    padding: 10px;
+    border: 1px solid #ff7b00;
+    border-radius: 5px;
+}
+
+#message-input {
+    flex-grow: 1;
+    background-color: #1a2a34;
+    border: none;
+    color: white;
+    padding: 10px;
+    outline: none;
+    border-radius: 5px;
+}
+
+#send-button {
+    background-color: #ff7b00;
+    border: none;
+    padding: 10px 20px;
+    color: white;
+    margin-left: 10px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+#send-button:hover {
+    background-color: #e56f00;
+}
+
+#settings-button {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    padding: 10px;
+    background-color: #ff7b00;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#settings-button:hover {
+    background-color: #e56f00;
+}

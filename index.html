@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Chat App</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            background-color: lightgray; 
+            position: relative;
+            min-height: 100vh;
+        }
+        h1 { 
+            margin-top: 20px; 
+        }
+        #chat-container { 
+            display: flex; 
+            flex-direction: column; 
+            width: 90%; 
+            max-width: 600px; 
+        }
+        #messages { 
+            border: 1px solid #ccc; 
+            padding: 10px; 
+            height: 300px; 
+            overflow-y: scroll; 
+            background: white; 
+        }
+        .message { 
+            margin-bottom: 5px; 
+        }
+        .message .sender { 
+            font-weight: bold; 
+            margin-right: 5px; 
+        }
+        #message-input { 
+            width: 80%; 
+            padding: 10px; 
+            margin: 10px 0; 
+        }
+        #send-button { 
+            padding: 10px; 
+        }
+        #input-container { 
+            display: flex; 
+            justify-content: space-between; 
+            width: 100%; 
+        }
+        #add-server-form {
+            display: none;
+            margin-top: 20px;
+        }
+        #add-server-form input[type="text"] {
+            padding: 10px;
+            margin-right: 10px;
+        }
+        #add-server-buttons {
+            margin-top: 10px;
+        }
+        #settings-button {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            padding: 10px;
+        }
+    </style>
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp, getDocs, where } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
+
+        // Firebase Configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyBZLvrL5mJJWID6mAFhRD804NmEbXWdAJ0",
+          authDomain: "chat-3e395.firebaseapp.com",
+          projectId: "chat-3e395",
+          storageBucket: "chat-3e395.appspot.com",
+          messagingSenderId: "744351708265",
+          appId: "1:744351708265:web:5f21f72b28da665aaddef8",
+          measurementId: "G-6RHSSTGT9X"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let selectedServerId = null;
+        let unsubscribeMessages = null;
+        let unsubscribeServers = null;
+
+        const authenticateUser = async () => {
+            const provider = new GoogleAuthProvider();
+            try {
+                const result = await signInWithPopup(auth, provider);
+                console.log(result.user);
+            } catch (error) {
+                console.error(error.message);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const serverSelect = document.getElementById('server-select');
+            const messagesDiv = document.getElementById('messages');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const signInButton = document.getElementById('sign-in-button');
+            const addServerButton = document.getElementById('add-server-button');
+            const addServerForm = document.getElementById('add-server-form');
+            const settingsButton = document.getElementById('settings-button');
+
+            signInButton.addEventListener('click', authenticateUser);
+
+            // Listen for authentication state changes
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // User is signed in
+                    signInButton.style.display = 'none';
+                    messageInput.style.display = 'block';
+                    sendButton.style.display = 'block';
+                    serverSelect.style.display = 'block';
+                    messagesDiv.style.display = 'block';
+                    addServerButton.style.display = 'block';
+
+                    await loadServers();  // Load servers when user is signed in
+                    listenForServerUpdates();  // Start listening for server updates
+                } else {
+                    // User is signed out
+                    signInButton.style.display = 'block';
+                    messageInput.style.display = 'none';
+                    sendButton.style.display = 'none';
+                    serverSelect.style.display = 'none';
+                    messagesDiv.style.display = 'none';
+                    addServerButton.style.display = 'none';
+                }
+            });
+
+            const loadServers = async () => {
+                const user = auth.currentUser;
+                if (!user) return;  // Ensure user is authenticated
+
+                // Load all servers and filter based on public access or user's allowed list
+                const snapshot = await getDocs(collection(db, 'servers'));
+                serverSelect.innerHTML = ''; // Clear previous servers
+
+                snapshot.forEach((doc) => {
+                    const serverData = doc.data();
+
+                    // Check if the server is public or if the current user is in the allowedUsers list
+                    if (serverData.Public || (serverData.allowedUsers && serverData.allowedUsers.includes(user.uid))) {
+                        const option = document.createElement('option');
+                        option.value = doc.id;
+                        option.text = serverData.Name;
+                        serverSelect.appendChild(option);
+                    }
+                });
+
+                if (serverSelect.options.length > 0) {
+                    serverSelect.value = serverSelect.options[0].value;
+                    selectedServerId = serverSelect.value;
+                    loadMessages(true);
+                    listenForMessages();
+                }
+            };
+
+            const listenForServerUpdates = () => {
+                const user = auth.currentUser;
+                if (!user) return;  // Ensure user is authenticated
+
+                const serversRef = collection(db, 'servers');
+                if (unsubscribeServers) unsubscribeServers(); // Unsubscribe from previous listener
+
+                unsubscribeServers = onSnapshot(serversRef, (snapshot) => {
+                    const visibleServers = new Set(serverSelect.options);
+                    
+                    snapshot.docChanges().forEach((change) => {
+                        const serverData = change.doc.data();
+                        const serverId = change.doc.id;
+
+                        // Check if the server is public or if the current user is in the allowedUsers list
+                        if (serverData.Public || (serverData.allowedUsers && serverData.allowedUsers.includes(user.uid))) {
+                            // Add server to the select list if not already present
+                            if (!document.getElementById(serverId)) {
+                                const option = document.createElement('option');
+                                option.id = serverId;
+                                option.value = serverId;
+                                option.text = serverData.Name;
+                                serverSelect.appendChild(option);
+                            }
+                        } else {
+                            // Remove server from the select list if it's no longer visible
+                            if (document.getElementById(serverId)) {
+                                serverSelect.removeChild(document.getElementById(serverId));
+                            }
+                        }
+                    });
+
+                    // Ensure the user stays on a valid server after update
+                    if (!serverSelect.querySelector(`option[value="${selectedServerId}"]`)) {
+                        if (serverSelect.options.length > 0) {
+                            serverSelect.value = serverSelect.options[0].value;
+                            selectedServerId = serverSelect.value;
+                            messagesDiv.innerHTML = '';
+                            loadMessages(true);
+                            listenForMessages();
+                        } else {
+                            messagesDiv.innerHTML = '';
+                            selectedServerId = null;
+                        }
+                    }
+                });
+            };
+
+            serverSelect.addEventListener('change', () => {
+                selectedServerId = serverSelect.value;
+                messagesDiv.innerHTML = '';
+                loadMessages(true);
+                listenForMessages();
+            });
+
+            const sendMessage = async () => {
+                const message = messageInput.value;
+                if (message.trim() !== "") {
+                    await addDoc(collection(db, 'messages'), {
+                        ServerID: selectedServerId,
+                        text: message,
+                        sender: auth.currentUser.displayName,
+                        timestamp: serverTimestamp()
+                    });
+                    messageInput.value = "";
+                }
+            };
+
+            sendButton.addEventListener('click', sendMessage);
+
+            const loadMessages = async (initialLoad = false) => {
+                if (!selectedServerId) return;
+
+                let q;
+                if (initialLoad) {
+                    q = query(collection(db, 'messages'), orderBy('timestamp', 'asc'), limit(30));
+                } else {
+                    q = query(collection(db, 'messages'), orderBy('timestamp', 'asc'));
+                }
+
+                const snapshot = await getDocs(q);
+                if (!snapshot.empty) {
+                    const messages = [];
+                    snapshot.forEach((doc) => {
+                        const messageData = doc.data();
+                        if (messageData.ServerID === selectedServerId) {
+                            const messageElement = document.createElement('div');
+                            messageElement.classList.add('message');
+                            messageElement.innerHTML = `<span class="sender">${messageData.sender}:</span> ${messageData.text}`;
+                            messages.push(messageElement);
+                        }
+                    });
+
+                    if (initialLoad) {
+                        messages.forEach((messageElement) => messagesDiv.appendChild(messageElement));
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    }
+                }
+            };
+
+            const listenForMessages = () => {
+                if (unsubscribeMessages) unsubscribeMessages(); // Unsubscribe from previous listener
+                const q = query(collection(db, 'messages'), orderBy('timestamp', 'asc'));
+                unsubscribeMessages = onSnapshot(q, (snapshot) => {
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === 'added') {
+                            const messageData = change.doc.data();
+                            if (messageData.ServerID === selectedServerId) {
+                                const messageElement = document.createElement('div');
+                                messageElement.classList.add('message');
+                                messageElement.innerHTML = `<span class="sender">${messageData.sender}:</span> ${messageData.text}`;
+                                messagesDiv.appendChild(messageElement);
+                                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                            }
+                        }
+                    });
+                });
+            };
+
+            addServerButton.addEventListener('click', () => {
+                addServerForm.style.display = 'block';
+            });
+
+            const addServerFormSubmit = async (event) => {
+                event.preventDefault();
+                const serverNameInput = document.getElementById('server-name-input');
+                const serverCodeInput = document.getElementById('server-code-input');
+                const serverPublicInput = document.querySelector('input[name="server-public"]:checked');
+                let serverCode = serverCodeInput.value.trim();
+                const serverName = serverNameInput.value.trim();
+                const serverPublic = serverPublicInput.value === 'public';
+
+                // Generate random code if left blank
+                if (serverCode === "") {
+                    serverCode = generateRandomCode(8);
+                }
+
+                if (serverName !== "" && auth.currentUser) {
+                    try {
+                        const serverDoc = await addDoc(collection(db, 'servers'), {
+                            Timestamp: serverTimestamp(),
+                            Name: serverName,
+                            Code: serverCode,
+                            Public: serverPublic,
+                            Creator: {
+                                name: auth.currentUser.displayName,
+                                uid: auth.currentUser.uid,
+                                email: auth.currentUser.email
+                            },
+                            // Add the allowedUsers field for private servers, adding the creator's UID automatically
+                            allowedUsers: serverPublic ? [] : [auth.currentUser.uid]  // Empty list for public, creator's UID for private
+                        });
+
+                        // Switch to the newly created server
+                        serverSelect.value = serverDoc.id;
+                        selectedServerId = serverDoc.id;
+                        messagesDiv.innerHTML = '';
+                        loadMessages(true);
+                        listenForMessages();
+                        addServerForm.reset();
+                        addServerForm.style.display = 'none';
+                    } catch (error) {
+                        console.error("Error adding server: ", error);
+                    }
+                }
+            };
+
+            addServerForm.addEventListener('submit', addServerFormSubmit);
+
+            const generateRandomCode = (length) => {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                let result = '';
+                for (let i = 0; i < length; i++) {
+                    result += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return result;
+            };
+
+            // Initialize server listeners
+            loadServers();
+            listenForServerUpdates();
+        });
+    </script>
+</head>
+<body>
+    <h1>Firebase Chat App</h1>
+    <button id="sign-in-button">Sign In with Google</button>
+
+    <div id="chat-container">
+        <select id="server-select" style="display:none;"></select>
+        <div id="messages" style="display:none;"></div>
+        <div id="input-container">
+            <input type="text" id="message-input" style="display:none;" placeholder="Type your message" />
+            <button id="send-button" style="display:none;">Send</button>
+        </div>
+    </div>
+
+    <button id="add-server-button" style="display:none;">Add Server</button>
+
+    <form id="add-server-form">
+        <input type="text" id="server-name-input" placeholder="Server Name" required>
+        <input type="text" id="server-code-input" placeholder="Server Code (Optional)">
+        <div>
+            <label><input type="radio" name="server-public" value="public" checked> Public</label>
+            <label><input type="radio" name="server-public" value="private"> Private</label>
+        </div>
+        <button type="submit">Add Server</button>
+    </form>
+    <a href="settings.html">
+        <button id="settings-button">Settings</button>
+    </a>
+</body>
+</html>

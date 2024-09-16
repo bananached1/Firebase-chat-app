@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Settings</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: lightgray;
+        }
+        #settings-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        #settings-container h1 {
+            margin-bottom: 20px;
+        }
+        #settings-container input {
+            margin: 10px 0;
+            padding: 10px;
+            width: 200px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #settings-container button {
+            padding: 10px;
+            margin: 10px 0;
+            width: 220px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        #settings-container button#sign-out-button {
+            background-color: #f44336;
+        }
+    </style>
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js";
+        import { getAuth, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/9.0.0/firebase-auth.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyBZLvrL5mJJWID6mAFhRD804NmEbXWdAJ0",
+          authDomain: "chat-3e395.firebaseapp.com",
+          projectId: "chat-3e395",
+          storageBucket: "chat-3e395.appspot.com",
+          messagingSenderId: "744351708265",
+          appId: "1:744351708265:web:5f21f72b28da665aaddef8",
+          measurementId: "G-6RHSSTGT9X"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const displayNameInput = document.getElementById('display-name-input');
+            const updateButton = document.getElementById('update-button');
+            const signOutButton = document.getElementById('sign-out-button');
+
+            // Function to create user document if it doesn't exist
+            const ensureUserDocExists = async (user) => {
+                const userDocRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (!userDoc.exists()) {
+                    await setDoc(userDocRef, { displayName: user.displayName || '' });
+                }
+            };
+
+            // Display current user information
+            auth.onAuthStateChanged(async (user) => {
+                if (user) {
+                    await ensureUserDocExists(user);
+                    const userDocRef = doc(db, 'users', user.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    displayNameInput.value = userDoc.data().displayName || '';
+                } else {
+                    window.location.href = 'index.html'; // Redirect to main page if not logged in
+                }
+            });
+
+            // Update display name
+            updateButton.addEventListener('click', async () => {
+                const newDisplayName = displayNameInput.value.trim();
+                if (newDisplayName && auth.currentUser) {
+                    try {
+                        // Update display name in Firebase Authentication
+                        await updateProfile(auth.currentUser, { displayName: newDisplayName });
+
+                        // Update display name in Firestore
+                        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+                        await updateDoc(userDocRef, { displayName: newDisplayName });
+
+                        alert('Display name updated successfully!');
+                    } catch (error) {
+                        console.error('Error updating display name: ', error);
+                        alert('Hopefully updated display name');
+                    }
+                } else {
+                    alert('Please enter a valid display name.');
+                }
+            });
+
+            // Sign out
+            signOutButton.addEventListener('click', () => {
+                signOut(auth).then(() => {
+                    window.location.href = 'index.html'; // Redirect to main page after sign out
+                }).catch((error) => {
+                    console.error('Error signing out: ', error);
+                    alert('Failed to sign out. Please try again.');
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="settings-container">
+        <h1>Settings</h1>
+        <input id="display-name-input" type="text" placeholder="Enter new display name">
+        <button id="update-button">Update Display Name</button>
+        <button id="sign-out-button">Sign Out</button>
+        <a href="index.html">
+            <button>Home</button>
+        </a>
+    </div>
+</body>
+</html>
